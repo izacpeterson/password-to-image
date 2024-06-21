@@ -2,7 +2,7 @@
 
 Welcome to **Password-to-Image**, the app you never knew you needed!
 
-Please note, I am not a security expert. I learned encryption just for ths project. Use at your own risk.
+Please note, I am not a security expert. This project is for fun. I learned encryption just for ths project. Use at your own risk.
 
 ## What Does It Do?
 
