@@ -7,27 +7,222 @@ import (
 	"crypto/sha256"
 	"encoding/base64"
 	"fmt"
+	"image"
+	"image/color"
+	"image/png"
 	"io"
+	"math"
+	"os"
+	"strconv"
+	"strings"
 )
 
 func main() {
-	password := "mypassword123"
-	key := "myverystrongpasswordo32bitlength"
+	key := "pass"
 
-	encrypted, err := encrypt(password, key)
+	myPasswords := make(map[string]string)
+	textFromImage, err := imageToText()
+
+	if err != nil {
+		fmt.Println("error: ", err)
+	} else {
+		decryptedText, err := decrypt(textFromImage, key)
+		if err != nil {
+			fmt.Println("error: ", err)
+		}
+		myPasswords = textToMap(decryptedText)
+	}
+
+	args := os.Args
+
+	if len(args) > 1 {
+		switch args[1] {
+		case "list":
+			for key, value := range myPasswords {
+				fmt.Println(key, value)
+			}
+
+			os.Exit(0)
+
+		case "set":
+			if len(args) < 4 || len(args) > 4 {
+				fmt.Printf("Invalid Arguments. To add a password: add <label> <password>")
+				os.Exit(0)
+			}
+
+			myPasswords[args[2]] = args[3]
+
+		default:
+			fmt.Println("BAD USE")
+			os.Exit(0)
+		}
+	}
+
+	fmt.Println(myPasswords)
+	encryptedPasswords := prepareText(myPasswords, key)
+
+	binaryPasswords := textToBinary(encryptedPasswords)
+
+	binaryToImage(binaryPasswords)
+
+	// encrypted, err := encrypt(password, key)
+	// if err != nil {
+	// 	fmt.Println("ERROR: ", err)
+	// }
+
+	// fmt.Println("Encryped: ", encrypted)
+
+	// decrypted, err := decrypt(encrypted, key)
+	// if err != nil {
+	// 	fmt.Println("ERROR: ", err)
+	// }
+
+	// fmt.Println("Decrypted: ", decrypted)
+
+}
+
+func textToMap(s string) map[string]string {
+	fmt.Println(s)
+
+	result := make(map[string]string)
+	s = s[1 : len(s)-1]
+	pairs := strings.Split(s, "][")
+	for _, pair := range pairs {
+		parts := strings.Split(pair, ":")
+		if len(parts) == 2 {
+			result[parts[0]] = parts[1]
+		}
+	}
+	return result
+}
+
+func prepareText(passwords map[string]string, masterPassword string) string {
+	var passwordString string = ""
+	for key, value := range passwords {
+		passwordString = passwordString + "[" + key + ":" + value + "]"
+	}
+
+	encryptedPasswordString, err := encrypt(passwordString, masterPassword)
 	if err != nil {
 		fmt.Println("ERROR: ", err)
 	}
 
-	fmt.Println("Encryped: ", encrypted)
+	return encryptedPasswordString
+}
 
-	decrypted, err := decrypt(encrypted, key)
-	if err != nil {
-		fmt.Println("ERROR: ", err)
+func textToBinary(text string) string {
+	var binarying string
+	for _, c := range text {
+		binarying += fmt.Sprintf("%08b", c)
+	}
+	return binarying
+}
+
+func binaryToText(binary string) string {
+	var text strings.Builder
+
+	if len(binary)%8 != 0 {
+		binary = binary[:len(binary)-(len(binary)%8)]
 	}
 
-	fmt.Println("Decrypted: ", decrypted)
+	// Split the binary string into 8-bit chunks
+	for i := 0; i < len(binary); i += 8 {
+		byteStr := binary[i : i+8]
+		byteValue, err := strconv.ParseUint(byteStr, 2, 8)
+		if err != nil {
+			return ""
+		}
+		text.WriteByte(byte(byteValue))
+	}
 
+	return text.String()
+}
+
+func binaryToImage(binary string) {
+	length := len(binary)
+	imageDim := int(math.Ceil(math.Sqrt(float64(length))))
+
+	fmt.Println("Length: ", length)
+	fmt.Println("Image Dimensions: ", imageDim)
+
+	img := image.NewRGBA(image.Rect(0, 0, imageDim, imageDim))
+
+	var pixelIndex int
+
+	for y := 0; y < imageDim; y++ {
+		for x := 0; x < imageDim; x++ {
+			if pixelIndex < length {
+				if binary[pixelIndex] == '0' {
+					img.Set(x, y, color.RGBA{0, 0, 0, 255})
+				} else {
+					img.Set(x, y, color.RGBA{255, 255, 255, 255})
+				}
+				pixelIndex++
+			} else {
+				img.Set(x, y, color.RGBA{0, 0, 0, 255}) // Padding with black if needed
+			}
+		}
+	}
+
+	file, err := os.Create("image.png")
+	if err != nil {
+		panic(err)
+	}
+	defer file.Close()
+
+	// Encode and save the image to the file
+	if err := png.Encode(file, img); err != nil {
+		panic(err)
+	}
+}
+
+func imageToText() (string, error) {
+	inputImage := "image.png"
+	file, err := os.Open(inputImage)
+	if err != nil {
+		fmt.Println("ERROR OPENING IMAGE: ", err)
+		return "", err
+	}
+	defer file.Close()
+
+	img, err := png.Decode(file)
+	if err != nil {
+		fmt.Println("ERROR DECODING IMAGE: ", err)
+		return "", err
+	}
+
+	var binarying string
+
+	bounds := img.Bounds()
+	width, height := bounds.Max.X, bounds.Max.Y
+
+	for y := 0; y < height; y++ {
+		for x := 0; x < width; x++ {
+			pixelColor := color.RGBAModel.Convert(img.At(x, y)).(color.RGBA)
+			if pixelColor.R == 255 {
+				binarying += "1"
+			} else {
+				binarying += "0"
+			}
+		}
+	}
+
+	result := binaryToText(binarying)
+
+	// trim invalid runes
+	validBase64Length := len(result)
+	for validBase64Length > 0 && !isValidBase64Char(rune(result[validBase64Length-1])) {
+		validBase64Length--
+	}
+
+	result = result[:validBase64Length]
+
+	return result, err
+}
+
+// I was getting an error about illegal base64 runes. This should check for those. Probably a return or tab or something
+func isValidBase64Char(c rune) bool {
+	return (c >= 'A' && c <= 'Z') || (c >= 'a' && c <= 'z') || (c >= '0' && c <= '9') || c == '+' || c == '/' || c == '='
 }
 
 func deriveKey(password string) []byte {
