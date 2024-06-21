@@ -65,6 +65,7 @@ func main() {
 
 	myPasswords := make(map[string]string)
 
+	fmt.Println()
 	fmt.Println("Welcome to Password-to-Image")
 	fmt.Println("What would you like to do?")
 	fmt.Println("a: Add a password")
@@ -78,6 +79,18 @@ func main() {
 
 	switch userInput {
 	case "a":
+		textFromImage, err := imageToText()
+
+		if err != nil {
+			fmt.Println("error: ", err)
+		} else {
+			decryptedText, err := decrypt(textFromImage, hashedPassword)
+			if err != nil {
+				fmt.Println("error: ", err)
+			}
+			myPasswords = textToMap(decryptedText)
+		}
+
 		var label, password string
 		fmt.Print("Label: ")
 		fmt.Scanln(&label)
@@ -106,11 +119,29 @@ func main() {
 
 		fmt.Println("Your passwords:")
 		for key, value := range myPasswords {
-			fmt.Printf("%v: %v", key, value)
+			fmt.Printf("%v: %v\n", key, value)
 		}
 		os.Exit(0)
 	case "g":
+		textFromImage, err := imageToText()
 
+		if err != nil {
+			fmt.Println("error: ", err)
+		} else {
+			decryptedText, err := decrypt(textFromImage, hashedPassword)
+			if err != nil {
+				fmt.Println("error: ", err)
+			}
+			myPasswords = textToMap(decryptedText)
+		}
+
+		var userInput string
+		fmt.Print("What password would you like to get? ")
+		fmt.Scanln(&userInput)
+
+		fmt.Printf("Your %v password is : %v", userInput, myPasswords[userInput])
+
+		os.Exit(0)
 	default:
 		fmt.Println("You picked wrong. Goodbye.")
 		os.Exit(0)
@@ -178,8 +209,8 @@ func binaryToImage(binary string) {
 	length := len(binary)
 	imageDim := int(math.Ceil(math.Sqrt(float64(length))))
 
-	fmt.Println("Length: ", length)
-	fmt.Println("Image Dimensions: ", imageDim)
+	fmt.Println("Binary Length: ", length)
+	fmt.Printf("Image Dimensions: %vx%v", imageDim, imageDim)
 
 	img := image.NewRGBA(image.Rect(0, 0, imageDim, imageDim))
 
@@ -210,6 +241,8 @@ func binaryToImage(binary string) {
 	if err := png.Encode(file, img); err != nil {
 		panic(err)
 	}
+
+	fmt.Println("Password saved to image.png")
 }
 
 func imageToText() (string, error) {
