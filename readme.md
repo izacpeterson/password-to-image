@@ -4,6 +4,10 @@ Welcome to **Password-to-Image**, the app you never knew you needed!
 
 Please note, I am not a security expert. This project is for fun. I learned encryption just for ths project. Use at your own risk.
 
+An example of 4 passwords being stored:
+
+<img src="demo.png" alt="Example Image" width="300" height="300">
+
 ## What Does It Do?
 
 Have you ever thought, "Hey, I want to store my passwords in an image!"? No? Well, too bad! This app does exactly that. It encrypts your passwords, converts them to binary, and saves them as a black-and-white image.
