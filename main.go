@@ -1,6 +1,7 @@
 package main
 
 import (
+	"bytes"
 	"crypto/aes"
 	"crypto/cipher"
 	"crypto/rand"
@@ -18,71 +19,106 @@ import (
 )
 
 func main() {
-	key := "pass"
+	hashedPasswordFile := "hashedpassword.txt"
+	fileContent, err := os.ReadFile(hashedPasswordFile)
 
-	myPasswords := make(map[string]string)
-	textFromImage, err := imageToText()
+	hashedPassword := string(fileContent)
 
 	if err != nil {
-		fmt.Println("error: ", err)
+		var masterPassword string
+
+		fmt.Print("Error opeining master password. Please set a new Master Password. This password will be used to encrypt your other passwords, so choose wisely.")
+		fmt.Scanln(&masterPassword)
+
+		hashedMasterPassword := deriveKey(masterPassword)
+
+		file, err := os.Create("hashedpassword.txt")
+		if err != nil {
+			fmt.Println("Error Creating File", err)
+			return
+
+		}
+		defer file.Close()
+
+		_, err = file.WriteString(string(hashedMasterPassword))
+		if err != nil {
+			fmt.Println("Error writing to file:", err)
+			return
+		}
+
+		os.Exit(0)
+	}
+
+	if len(os.Args) < 2 {
+		fmt.Println("Please enter a password")
+		os.Exit(0)
+	}
+
+	inputPassword := os.Args[1]
+
+	if bytes.Equal(deriveKey(inputPassword), []byte(hashedPassword)) {
+		fmt.Println("Pass Match")
 	} else {
-		decryptedText, err := decrypt(textFromImage, key)
+		fmt.Println("Pass no Match")
+		os.Exit(0)
+	}
+
+	myPasswords := make(map[string]string)
+
+	fmt.Println("Welcome to Password-to-Image")
+	fmt.Println("What would you like to do?")
+	fmt.Println("a: Add a password")
+	fmt.Println("l: list your passwords")
+	fmt.Println("g: get a signle password")
+
+	var userInput string
+
+	fmt.Print(": ")
+	fmt.Scanln(&userInput)
+
+	switch userInput {
+	case "a":
+		var label, password string
+		fmt.Print("Label: ")
+		fmt.Scanln(&label)
+
+		fmt.Print("Password: ")
+		fmt.Scanln(&password)
+
+		myPasswords[label] = password
+
+		encryptedPasswords := prepareText(myPasswords, hashedPassword)
+		binaryPasswords := textToBinary(encryptedPasswords)
+		binaryToImage(binaryPasswords)
+
+	case "l":
+		textFromImage, err := imageToText()
+
 		if err != nil {
 			fmt.Println("error: ", err)
-		}
-		myPasswords = textToMap(decryptedText)
-	}
-
-	args := os.Args
-
-	if len(args) > 1 {
-		switch args[1] {
-		case "list":
-			for key, value := range myPasswords {
-				fmt.Println(key, value)
+		} else {
+			decryptedText, err := decrypt(textFromImage, hashedPassword)
+			if err != nil {
+				fmt.Println("error: ", err)
 			}
-
-			os.Exit(0)
-
-		case "set":
-			if len(args) < 4 || len(args) > 4 {
-				fmt.Printf("Invalid Arguments. To add a password: add <label> <password>")
-				os.Exit(0)
-			}
-
-			myPasswords[args[2]] = args[3]
-
-		default:
-			fmt.Println("BAD USE")
-			os.Exit(0)
+			myPasswords = textToMap(decryptedText)
 		}
+
+		fmt.Println("Your passwords:")
+		for key, value := range myPasswords {
+			fmt.Printf("%v: %v", key, value)
+		}
+		os.Exit(0)
+	case "g":
+
+	default:
+		fmt.Println("You picked wrong. Goodbye.")
+		os.Exit(0)
 	}
-
-	fmt.Println(myPasswords)
-	encryptedPasswords := prepareText(myPasswords, key)
-
-	binaryPasswords := textToBinary(encryptedPasswords)
-
-	binaryToImage(binaryPasswords)
-
-	// encrypted, err := encrypt(password, key)
-	// if err != nil {
-	// 	fmt.Println("ERROR: ", err)
-	// }
-
-	// fmt.Println("Encryped: ", encrypted)
-
-	// decrypted, err := decrypt(encrypted, key)
-	// if err != nil {
-	// 	fmt.Println("ERROR: ", err)
-	// }
-
-	// fmt.Println("Decrypted: ", decrypted)
 
 }
 
 func textToMap(s string) map[string]string {
-	fmt.Println(s)
 
 	result := make(map[string]string)
 	s = s[1 : len(s)-1]
